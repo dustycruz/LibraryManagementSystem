@@ -1,5 +1,4 @@
-﻿
-using LibraryAPI.Helpers;
+﻿using LibraryAPI.Helpers;
 using LibraryManagementSystem.DTOs.Auth;
 using LibraryManagementSystem.Models;
 using LibraryManagementSystem.Ropositories.Interfaces;
@@ -10,73 +9,71 @@ namespace LibraryAPI.Services.Implementations;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepo;
-    private readonly IGenericRepository<Role> _roleRepo;
     private readonly IGenericRepository<UserRole> _userRoleRepo;
+    private readonly IGenericRepository<Role> _roleRepo;
     private readonly JwtHelper _jwtHelper;
-    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IUserRepository userRepo,
-        IGenericRepository<Role> roleRepo,
-        IGenericRepository<UserRole> userRoleRepo,
-        JwtHelper jwtHelper,
-        ILogger<AuthService> logger)
+    public AuthService(IUserRepository userRepo, IGenericRepository<UserRole> userRoleRepo,
+        IGenericRepository<Role> roleRepo, JwtHelper jwtHelper)
     {
         _userRepo = userRepo;
-        _roleRepo = roleRepo;
         _userRoleRepo = userRoleRepo;
+        _roleRepo = roleRepo;
         _jwtHelper = jwtHelper;
-        _logger = logger;
     }
 
     public async Task<AuthResponseDto?> LoginAsync(LoginDto dto)
     {
-        var user = await _userRepo.GetByEmailAsync(dto.Email);
-        if (user == null || !user.IsActive)
-        {
-            _logger.LogWarning("Login failed for email: {Email}", dto.Email);
+        var users = await _userRepo.FindAsync(u => u.Email == dto.Email);
+        var user = users.FirstOrDefault();
+        if (user == null) return null;
+
+        // Reload with roles
+        var userWithRoles = await _userRepo.GetWithRolesAsync(user.UserId);
+        if (userWithRoles == null) return null;
+
+        // Verify password using BCrypt
+        if (!BCrypt.Net.BCrypt.Verify(dto.Password, userWithRoles.PasswordHash))
             return null;
-        }
 
-        if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-        {
-            _logger.LogWarning("Invalid password for email: {Email}", dto.Email);
-            return null;
-        }
-
-        var roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList();
-        var token = _jwtHelper.GenerateToken(user, roles);
-
+        var roles = userWithRoles.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+        var token = _jwtHelper.GenerateToken(userWithRoles, roles);
         return new AuthResponseDto
         {
+            UserId = userWithRoles.UserId,
+            Email = userWithRoles.Email,
+            FullName = $"{userWithRoles.FirstName} {userWithRoles.LastName}",
             Token = token,
-            Email = user.Email,
-            FullName = $"{user.FirstName} {user.LastName}",
-            UserId = user.UserId,
-            Roles = roles,
-            Expiry = DateTime.UtcNow.AddHours(24)
+            Roles = roles
         };
     }
 
-    public async Task<bool> RegisterAsync(RegisterDto dto)
+    public async Task<AuthResponseDto?> RegisterAsync(RegisterDto dto)
     {
-        if (await _userRepo.EmailExistsAsync(dto.Email))
-            return false;
-       
+        // Check if email already exists
+        var existingUsers = await _userRepo.FindAsync(u => u.Email == dto.Email);
+        if (existingUsers.Any()) return null;
+
+        // Create new user
         var user = new User
         {
             FirstName = dto.FirstName,
             LastName = dto.LastName,
             Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
 
+        // Hash password using BCrypt
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+
+        // Save user
         await _userRepo.AddAsync(user);
         await _userRepo.SaveChangesAsync();
 
-        // Assign Member role by default
-        var memberRole = (await _roleRepo.FindAsync(r => r.RoleName == "Member")).FirstOrDefault();
+        // Assign default "Member" role
+        var roles = await _roleRepo.FindAsync(r => r.RoleName == "Member");
+        var memberRole = roles.FirstOrDefault();
         if (memberRole != null)
         {
             var userRole = new UserRole { UserId = user.UserId, RoleId = memberRole.RoleId };
@@ -84,6 +81,20 @@ public class AuthService : IAuthService
             await _userRoleRepo.SaveChangesAsync();
         }
 
-        return true;
+        // Reload user with roles
+        var registeredUser = await _userRepo.GetWithRolesAsync(user.UserId);
+        if (registeredUser == null) return null;
+
+        // Generate token
+        var roleNames = registeredUser.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+        var token = _jwtHelper.GenerateToken(registeredUser, roleNames);
+        return new AuthResponseDto
+        {
+            UserId = registeredUser.UserId,
+            Email = registeredUser.Email,
+            FullName = $"{registeredUser.FirstName} {registeredUser.LastName}",
+            Token = token,
+            Roles = roleNames
+        };
     }
 }

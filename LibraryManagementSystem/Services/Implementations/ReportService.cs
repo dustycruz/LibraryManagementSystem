@@ -1,5 +1,4 @@
-﻿
-using LibraryManagementSystem.Data;
+﻿using LibraryManagementSystem.Data;
 using LibraryManagementSystem.DTOs.Reports;
 using LibraryManagementSystem.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -79,36 +78,52 @@ public class ReportService : IReportService
             .ToListAsync();
     }
 
+    // FIXED: materialize from DB first, then project in memory
+    // EF Core cannot translate TimeSpan math or (int) casts to SQL
     public async Task<List<OverdueReportDto>> GetOverdueBooksReportAsync()
     {
-        return await _context.BorrowRecords
+        var records = await _context.BorrowRecords
             .Include(br => br.User)
             .Include(br => br.Book)
             .Include(br => br.Fine)
             .Where(br => br.DueDate < DateTime.UtcNow && br.Status != "Returned")
-            .Select(br => new OverdueReportDto
+            .ToListAsync();
+
+        return records
+            .Select(br =>
             {
-                BorrowId = br.BorrowId,
-                MemberName = br.User.FirstName + " " + br.User.LastName,
-                Email = br.User.Email,
-                BookTitle = br.Book.Title,
-                ISBN = br.Book.ISBN,
-                BorrowDate = br.BorrowDate,
-                DueDate = br.DueDate,
-                DaysOverdue = (int)((DateTime.UtcNow - br.DueDate).TotalDays),
-                FineAmount = br.Fine != null
-    ? br.Fine.Amount
-    : (int)(DateTime.UtcNow - br.DueDate).TotalDays * 5m,
-                FineIsPaid = br.Fine != null && br.Fine.IsPaid
+                var daysOverdue = (int)(DateTime.UtcNow - br.DueDate).TotalDays;
+                return new OverdueReportDto
+                {
+                    BorrowId = br.BorrowId,
+                    MemberName = br.User.FirstName + " " + br.User.LastName,
+                    Email = br.User.Email,
+                    BookTitle = br.Book.Title,
+                    ISBN = br.Book.ISBN,
+                    BorrowDate = br.BorrowDate,
+                    DueDate = br.DueDate,
+                    DaysOverdue = daysOverdue,
+                    FineAmount = br.Fine != null
+                                     ? br.Fine.Amount
+                                     : daysOverdue * 5m,
+                    FineIsPaid = br.Fine != null && br.Fine.IsPaid
+                };
             })
             .OrderByDescending(r => r.DaysOverdue)
-            .ToListAsync();
+            .ToList();
     }
 
+    // FIXED: materialize from DB first, then project in memory
+    // EF Core cannot translate .Sum() on nested navigation properties to SQL
     public async Task<List<UserActivityReportDto>> GetUserActivityReportAsync()
     {
-        return await _context.Users
+        var users = await _context.Users
+            .Include(u => u.BorrowRecords)
+                .ThenInclude(br => br.Fine)
             .Where(u => u.IsActive)
+            .ToListAsync();
+
+        return users
             .Select(u => new UserActivityReportDto
             {
                 UserId = u.UserId,
@@ -117,11 +132,17 @@ public class ReportService : IReportService
                 TotalBorrows = u.BorrowRecords.Count,
                 ActiveBorrows = u.BorrowRecords.Count(br => br.Status != "Returned"),
                 ReturnedBooks = u.BorrowRecords.Count(br => br.Status == "Returned"),
-                TotalFines = u.BorrowRecords.Where(br => br.Fine != null).Sum(br => br.Fine!.Amount),
-                PaidFines = u.BorrowRecords.Where(br => br.Fine != null && br.Fine.IsPaid).Sum(br => br.Fine!.Amount),
-                UnpaidFines = u.BorrowRecords.Where(br => br.Fine != null && !br.Fine.IsPaid).Sum(br => br.Fine!.Amount)
+                TotalFines = u.BorrowRecords
+                                 .Where(br => br.Fine != null)
+                                 .Sum(br => br.Fine!.Amount),
+                PaidFines = u.BorrowRecords
+                                 .Where(br => br.Fine != null && br.Fine.IsPaid)
+                                 .Sum(br => br.Fine!.Amount),
+                UnpaidFines = u.BorrowRecords
+                                 .Where(br => br.Fine != null && !br.Fine.IsPaid)
+                                 .Sum(br => br.Fine!.Amount)
             })
             .OrderByDescending(u => u.TotalBorrows)
-            .ToListAsync();
+            .ToList();
     }
 }

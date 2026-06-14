@@ -5,6 +5,6 @@ namespace LibraryManagementSystem.Services.Interfaces
     public interface IAuthService
     {
         Task<AuthResponseDto?> LoginAsync(LoginDto dto);
-        Task<bool> RegisterAsync(RegisterDto dto);
+        Task<AuthResponseDto?> RegisterAsync(RegisterDto dto);
     }
 }

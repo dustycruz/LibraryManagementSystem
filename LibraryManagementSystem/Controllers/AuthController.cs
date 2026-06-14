@@ -1,5 +1,4 @@
-﻿
-using LibraryAPI.Helpers;
+﻿using LibraryAPI.Helpers;
 using LibraryAPI.Services.Interfaces;
 using LibraryManagementSystem.DTOs.Auth;
 using LibraryManagementSystem.Services.Interfaces;
@@ -30,9 +29,9 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
-        var success = await _authService.RegisterAsync(dto);
-        if (!success)
+        var result = await _authService.RegisterAsync(dto);
+        if (result == null)
             return BadRequest(ApiResponse<object>.ErrorResponse("Email already in use."));
-        return Ok(ApiResponse<object>.SuccessResponse(null!, "Registration successful. You can now log in."));
+        return Ok(ApiResponse<AuthResponseDto>.SuccessResponse(result, "Registration successful!"));
     }
 }

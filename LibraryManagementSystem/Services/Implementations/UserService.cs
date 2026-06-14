@@ -34,10 +34,15 @@ public class UserService : IUserService
         return user == null ? null : _mapper.Map<UserDto>(user);
     }
 
+    // ← REPLACE THIS ENTIRE METHOD with the new code below
     public async Task<(UserDto? Result, string? Error)> UpdateUserAsync(int id, UpdateUserDto dto, int updatedByUserId)
     {
         var user = await _userRepo.GetWithRolesAsync(id);
         if (user == null) return (null, "User not found.");
+
+        // Validate role IDs exist
+        if (dto.RoleIds.Any(rid => rid <= 0))
+            return (null, "Invalid role IDs provided.");
 
         var oldRoles = user.UserRoles.Select(ur => ur.RoleId).ToList();
         user.FirstName = dto.FirstName;
@@ -45,16 +50,19 @@ public class UserService : IUserService
         user.IsActive = dto.IsActive;
         user.UpdatedAt = DateTime.UtcNow;
 
-        // Update roles
+        // Remove old roles
         var existingRoles = user.UserRoles.ToList();
         foreach (var ur in existingRoles)
             _userRoleRepo.Remove(ur);
+        await _userRepo.SaveChangesAsync();  // ← Save after removal
 
+        // Add new roles
         foreach (var roleId in dto.RoleIds)
             await _userRoleRepo.AddAsync(new UserRole { UserId = id, RoleId = roleId });
+        await _userRepo.SaveChangesAsync();  // ← Save after adding
 
         _userRepo.Update(user);
-        await _userRepo.SaveChangesAsync();
+        await _userRepo.SaveChangesAsync();  // ← Final save for user updates
 
         await _auditRepo.LogAsync(updatedByUserId, "UPDATE", "User", id,
             $"Roles: {string.Join(",", oldRoles)}", $"Roles: {string.Join(",", dto.RoleIds)}");

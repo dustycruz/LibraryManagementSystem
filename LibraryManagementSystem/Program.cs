@@ -7,10 +7,12 @@ using LibraryAPI.Services.Implementations;
 using LibraryAPI.Services.Interfaces;
 using LibraryAPI.Validators;
 using LibraryManagementSystem.Data;
+using LibraryManagementSystem.Models;
 using LibraryManagementSystem.Ropositories.Interfaces;
 using LibraryManagementSystem.Services.Interfaces;
 using LibraryManagementSystem.Validators;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -45,6 +47,9 @@ builder.Services.AddScoped<IBorrowRepository, BorrowRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IFineRepository, FineRepository>();
+
+// Password Hasher
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -124,9 +129,8 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Middleware pipeline
-// ✅ Correct order
 app.UseMiddleware<ExceptionMiddleware>();
-app.UseSerilogRequestLogging();      // move up, before routing
+app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -135,8 +139,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");        // CORS must be before Auth
-app.UseAuthentication();             // Auth before Authorization
+app.UseCors("AllowFrontend");
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

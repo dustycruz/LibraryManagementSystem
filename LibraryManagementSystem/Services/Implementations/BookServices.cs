@@ -22,12 +22,16 @@ public class BookService : IBookService
 
     public async Task<PagedResponse<BookDto>> GetBooksAsync(string? search, int? categoryId, bool? isActive, int page, int size)
     {
+        var (books, totalCount) = await _bookRepo.GetBooksPagedAsync(search, categoryId, isActive, page, size);
+        var dtos = _mapper.Map<List<BookDto>>(books);
+
         return new PagedResponse<BookDto>
         {
-            Data = new List<BookDto>(),
+            Data = dtos,
             PageNumber = page,
             PageSize = size,
-            TotalRecords = 0
+            TotalRecords = totalCount
+            // ← Remove TotalPages line - it calculates automatically!
         };
     }
 
@@ -79,9 +83,7 @@ public class BookService : IBookService
         if (await _bookRepo.HasActiveBorrowsAsync(id))
             throw new InvalidOperationException("Cannot delete a book with active borrows.");
 
-        book.IsActive = false;
-        book.UpdatedAt = DateTime.UtcNow;
-        _bookRepo.Update(book);
+        _bookRepo.Remove(book);
         await _bookRepo.SaveChangesAsync();
 
         await _auditRepo.LogAsync(deletedByUserId, "DELETE", "Book", id, $"Title: {book.Title}");

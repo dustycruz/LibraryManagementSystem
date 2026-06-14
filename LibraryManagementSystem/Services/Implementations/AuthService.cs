@@ -61,7 +61,7 @@ public class AuthService : IAuthService
     {
         if (await _userRepo.EmailExistsAsync(dto.Email))
             return false;
-
+       
         var user = new User
         {
             FirstName = dto.FirstName,

@@ -124,7 +124,9 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Middleware pipeline
+// ✅ Correct order
 app.UseMiddleware<ExceptionMiddleware>();
+app.UseSerilogRequestLogging();      // move up, before routing
 
 if (app.Environment.IsDevelopment())
 {
@@ -133,10 +135,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");
-app.UseAuthentication();
+app.UseCors("AllowFrontend");        // CORS must be before Auth
+app.UseAuthentication();             // Auth before Authorization
 app.UseAuthorization();
-app.UseSerilogRequestLogging();
+
 app.MapControllers();
+
+Console.WriteLine(
+    BCrypt.Net.BCrypt.HashPassword("Admin@123")
+);
 
 app.Run();

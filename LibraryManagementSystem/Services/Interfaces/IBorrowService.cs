@@ -1,15 +1,15 @@
-﻿using LibraryAPI.Helpers;
+﻿
+using LibraryAPI.Helpers;
 using LibraryManagementSystem.DTOs.Borrow;
 
-namespace LibraryManagementSystem.Services.Interfaces
+namespace LibraryAPI.Services.Interfaces;
+
+public interface IBorrowService
 {
-    public interface IBorrowService
-    {
-        Task<(BorrowDto? Result, string? Error)> BorrowBookAsync(int requestingUserId, BorrowRequestDto dto);
-        Task<(BorrowDto? Result, string? Error)> ReturnBookAsync(int processedByUserId, int borrowId);
-        Task<PagedResponse<BorrowDto>> GetAllBorrowsAsync(string? status, int page, int size);
-        Task<List<BorrowDto>> GetUserBorrowHistoryAsync(int userId);
-        Task<BorrowDto?> GetBorrowByIdAsync(int borrowId);
-        Task UpdateOverdueStatusAsync();
-    }
+    Task<(BorrowDto? Result, string? Error)> BorrowBookAsync(int requestingUserId, BorrowRequestDto dto);
+    Task<(BorrowDto? Result, string? Error)> ReturnBookAsync(int processedByUserId, int borrowId);
+    Task<PagedResponse<BorrowDto>> GetAllBorrowsAsync(string? status, int page, int size);
+    Task<List<BorrowDto>> GetUserBorrowHistoryAsync(int userId);
+    Task<BorrowDto?> GetBorrowByIdAsync(int borrowId);
+    Task UpdateOverdueStatusAsync();
 }

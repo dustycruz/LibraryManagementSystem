@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+﻿// BookService.cs
+using AutoMapper;
 using LibraryAPI.Helpers;
 using LibraryAPI.Services.Interfaces;
 using LibraryManagementSystem.DTOs.Books;
@@ -31,7 +32,6 @@ public class BookService : IBookService
             PageNumber = page,
             PageSize = size,
             TotalRecords = totalCount
-            // ← Remove TotalPages line - it calculates automatically!
         };
     }
 
@@ -45,10 +45,10 @@ public class BookService : IBookService
     {
         var book = _mapper.Map<Book>(dto);
         book.CreatedAt = DateTime.UtcNow;
+        book.AvailableCopies = dto.TotalCopies; // ← Set available copies equal to total
         await _bookRepo.AddAsync(book);
         await _bookRepo.SaveChangesAsync();
 
-        // Reload with category
         var created = await _bookRepo.GetWithCategoryAsync(book.BookId);
         await _auditRepo.LogAsync(createdByUserId, "CREATE", "Book", book.BookId,
             null, $"Title: {book.Title}, ISBN: {book.ISBN}");
@@ -62,8 +62,15 @@ public class BookService : IBookService
         if (book == null) return null;
 
         var oldValues = $"Title: {book.Title}, Author: {book.Author}";
+
+        // ← Calculate how many copies are currently borrowed
+        int borrowedCopies = book.TotalCopies - book.AvailableCopies;
+
         _mapper.Map(dto, book);
         book.UpdatedAt = DateTime.UtcNow;
+
+        // ← Recalculate available copies based on new total minus borrowed
+        book.AvailableCopies = Math.Max(0, dto.TotalCopies - borrowedCopies);
 
         _bookRepo.Update(book);
         await _bookRepo.SaveChangesAsync();
@@ -80,6 +87,8 @@ public class BookService : IBookService
         var book = await _bookRepo.GetByIdAsync(id);
         if (book == null) return false;
 
+        // ← FIX: Check if there are any borrowed copies (TotalCopies - AvailableCopies > 0)
+        // OR check if there are active borrow records
         if (await _bookRepo.HasActiveBorrowsAsync(id))
             throw new InvalidOperationException("Cannot delete a book with active borrows.");
 

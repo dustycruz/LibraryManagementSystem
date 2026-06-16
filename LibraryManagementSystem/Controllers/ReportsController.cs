@@ -67,22 +67,6 @@ public class ReportsController : ControllerBase
         }
     }
 
-    [HttpGet("overdue")]
-    [Authorize(Roles = "Admin,Librarian")]
-    public async Task<IActionResult> Overdue()
-    {
-        try
-        {
-            var data = await _reportService.GetOverdueBooksReportAsync();
-            return Ok(ApiResponse<List<OverdueReportDto>>.SuccessResponse(data));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading overdue report");
-            return StatusCode(500, ApiResponse<object>.ErrorResponse("Failed to load report."));
-        }
-    }
-
     [HttpGet("user-activity")]
     [Authorize(Roles = "Admin,Librarian")]
     public async Task<IActionResult> UserActivity()
@@ -95,6 +79,22 @@ public class ReportsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading user activity report");
+            return StatusCode(500, ApiResponse<object>.ErrorResponse("Failed to load report."));
+        }
+    }
+
+    [HttpGet("overdue")]
+    [Authorize(Roles = "Admin,Librarian")]
+    public async Task<IActionResult> Overdue()
+    {
+        try
+        {
+            var data = await _reportService.GetOverdueBooksReportAsync();
+            return Ok(ApiResponse<List<OverdueReportDto>>.SuccessResponse(data));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading overdue report");
             return StatusCode(500, ApiResponse<object>.ErrorResponse("Failed to load report."));
         }
     }
